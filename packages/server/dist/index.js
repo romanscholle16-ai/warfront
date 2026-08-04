@@ -61,6 +61,12 @@ app.get('/api/lobby/:code', async (req, res) => {
     });
 });
 const httpServer = http.createServer(app);
+// Log any HTTP server-level errors and exit — a crashed listen must not leave the
+// process hanging (Railway would show "Active" but the port is closed = 502).
+httpServer.on('error', (error) => {
+    console.error('[server] HTTP error:', error.message);
+    process.exit(1);
+});
 const gameServer = new Server({
     transport: new WebSocketTransport({
         server: httpServer,
@@ -78,7 +84,7 @@ gameServer.listen(PORT, '0.0.0.0').then(() => {
     }
     catch { /* UDP discovery is optional */ }
 }).catch((error) => {
-    console.error('[server] failed to start:', error);
+    console.error('[server] listen rejected:', error);
     process.exit(1);
 });
 for (const signal of ['SIGINT', 'SIGTERM']) {
