@@ -80,7 +80,7 @@ const gameServer = new Server({
 
 gameServer.define('war', WarRoom).filterBy(['code']);
 
-gameServer.listen(PORT).then(() => {
+gameServer.listen(PORT, '0.0.0.0').then(() => {
   const lan = primaryLanAddress();
   console.log('');
   console.log('  WARFRONT server running');
