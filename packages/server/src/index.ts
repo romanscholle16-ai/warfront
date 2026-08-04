@@ -70,8 +70,6 @@ app.get('/api/lobby/:code', async (req, res) => {
 
 const httpServer = http.createServer(app);
 
-// Log any HTTP server-level errors and exit — a crashed listen must not leave the
-// process hanging (Railway would show "Active" but the port is closed = 502).
 httpServer.on('error', (error: Error) => {
   console.error('[server] HTTP error:', error.message);
   process.exit(1);
@@ -80,7 +78,6 @@ httpServer.on('error', (error: Error) => {
 const gameServer = new Server({
   transport: new WebSocketTransport({
     server: httpServer,
-    // Phones sleep, tunnels stall — be patient before declaring a client gone.
     pingInterval: 8000,
     pingMaxRetries: 4,
   }),
@@ -88,14 +85,11 @@ const gameServer = new Server({
 
 gameServer.define('war', WarRoom).filterBy(['code']);
 
-console.log(`[server] starting on 0.0.0.0:${PORT}…`);
-
-gameServer.listen(PORT, '0.0.0.0').then(() => {
+// Listen manually — Colyseus's listen() sometimes doesn't forward the host
+// parameter to Node's HTTP server correctly on all transports.
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[server] WARFRONT server running on port ${PORT}`);
-  try { startLanDiscovery(PORT); } catch { /* UDP discovery is optional */ }
-}).catch((error: unknown) => {
-  console.error('[server] listen rejected:', error);
-  process.exit(1);
+  try { startLanDiscovery(PORT); } catch { /* optional */ }
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
