@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_22", "nodejs_22.openssl"]
+
+[phases.install]
+cmds = ["npm ci --ignore-scripts"]
+
+[phases.build]
+cmds = []
+
+[phases.start]
+cmd = "node packages/server/dist/index.js"
