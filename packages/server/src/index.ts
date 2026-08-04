@@ -80,15 +80,13 @@ const gameServer = new Server({
 
 gameServer.define('war', WarRoom).filterBy(['code']);
 
+console.log(`[server] starting on 0.0.0.0:${PORT}…`);
 gameServer.listen(PORT, '0.0.0.0').then(() => {
-  const lan = primaryLanAddress();
-  console.log('');
-  console.log('  WARFRONT server running');
-  console.log(`   local     ws://localhost:${PORT}`);
-  console.log(`   this WiFi ws://${lan}:${PORT}   <- use this on phones`);
-  console.log(`   tick      ${TICK_MS} ms (${1000 / TICK_MS} Hz)`);
-  console.log('');
-  startLanDiscovery(PORT);
+  console.log(`[server] WARFRONT server running on port ${PORT}`);
+  try { startLanDiscovery(PORT); } catch { /* UDP discovery is optional */ }
+}).catch((error: unknown) => {
+  console.error('[server] failed to start:', error);
+  process.exit(1);
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
