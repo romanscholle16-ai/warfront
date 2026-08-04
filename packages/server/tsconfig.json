@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    // @colyseus/schema installs property descriptors on its classes; ES class-field
+    // semantics ([[Define]]) would overwrite them. Must stay false.
+    "useDefineForClassFields": false,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../shared" }]
+}

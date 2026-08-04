@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>WARFRONT: Global Conquest</title>
+  <!-- viewport-fit=cover + safe-area insets in CSS: required for notched phones -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1117" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div id="war-room-background" aria-hidden="true">
+    <svg viewBox="0 0 1200 650" preserveAspectRatio="xMidYMid slice">
+      <path d="M105 170l90-65 110 26 26 78-68 49-10 89-92-8-55-72zM367 86l118-32 152 48 76 69-54 56-115-2-63 58-93-54-47-81zM666 278l85-50 63 45 35 127-70 164-95-44-27-137zM810 124l105-54 175 37 55 92-78 86-151-21-82-67zM927 370l114-36 104 68-27 93-131 12-72-72z" />
+      <path class="map-lines" d="M0 105h1200M0 215h1200M0 325h1200M0 435h1200M0 545h1200M160 0v650M360 0v650M560 0v650M760 0v650M960 0v650" />
+    </svg>
+  </div>
+  <!-- ── Menu ─────────────────────────────────────────────────────────── -->
+  <section id="screen-menu" class="screen active">
+    <div class="menu-card">
+      <h1 class="logo">WARFRONT</h1>
+      <p class="tagline">Global Conquest</p>
+      <p class="war-room-label">DEFEND · DEVELOP · DOMINATE</p>
+
+      <label class="field">
+        <span>Commander name</span>
+        <input id="input-name" type="text" maxlength="20" placeholder="Your name" autocomplete="off" />
+      </label>
+
+      <section class="commander-card">
+        <div class="commander-portrait" id="menu-portrait">★</div>
+        <div><strong>Commander profile</strong><p>Choose your public look before entering the lobby.</p></div>
+        <label class="field"><span>Uniform</span><select id="input-uniform"><option value="standard">Standard Dress</option><option value="field">Field Uniform</option><option value="desert">Desert Pattern</option><option value="winter">Winter Pattern</option></select></label>
+        <label class="field"><span>Accessory</span><select id="input-accessory"><option value="none">None</option><option value="beret">Beret</option><option value="peaked">Peaked Cap</option><option value="shades">Aviators</option></select></label>
+        <label class="field"><span>Flag</span><select id="input-flag"><option value="plain">Plain</option><option value="bars">Bars</option><option value="star">Star</option><option value="tricolor">Tricolour</option></select></label>
+        <label class="field"><span>Nation colour</span><select id="input-colour"><option value="#e8493f">Crimson</option><option value="#3f7fe8">Blue</option><option value="#3fbf6a">Green</option><option value="#e8c53f">Gold</option></select></label>
+      </section>
+
+      <label class="field">
+        <span>Leader class</span>
+        <select id="input-class">
+          <option value="military">Military Commander — stronger armies</option>
+          <option value="economic">Economic Leader — richer nation</option>
+          <option value="scientific">Scientific Leader — faster research</option>
+          <option value="diplomatic">Diplomatic Leader — better allies</option>
+        </select>
+      </label>
+
+      <div class="row">
+        <button id="btn-create" class="primary">Create Game</button>
+      </div>
+
+      <div class="row join-row">
+        <input id="input-code" type="text" maxlength="6" placeholder="CODE" class="code-input" autocomplete="off" />
+        <button id="btn-join">Join</button>
+      </div>
+
+      <details class="server-details">
+        <summary>Server</summary>
+        <label class="field">
+          <span>Address (your host's WiFi address)</span>
+          <input id="input-server" type="text" placeholder="ws://192.168.1.10:2567" autocomplete="off" />
+        </label>
+        <button id="btn-scan" class="ghost">Find games on this WiFi</button>
+        <ul id="lobby-list" class="lobby-list"></ul>
+      </details>
+
+      <p id="menu-status" class="status"></p>
+    </div>
+  </section>
+
+  <!-- ── Lobby ────────────────────────────────────────────────────────── -->
+  <section id="screen-lobby" class="screen">
+    <div class="menu-card">
+      <h2>Match code</h2>
+      <div id="lobby-code" class="big-code">------</div>
+      <p class="hint">Share this code. Everyone joins from their own phone.</p>
+      <ul id="lobby-players" class="player-list"></ul>
+
+      <section id="lobby-custom" class="lobby-custom">
+        <div class="lobby-custom-head">
+          <div id="lobby-portrait" class="commander-portrait">★</div>
+          <div class="grow">
+            <strong>Your commander</strong>
+            <p class="hint" style="text-align:left;margin:2px 0 0">Choose your head of state — this is your player portrait.</p>
+          </div>
+        </div>
+        <div id="leader-styles" class="style-grid"></div>
+      </section>
+
+      <div class="row">
+        <button id="btn-ready" class="ghost">Ready</button>
+        <button id="btn-start" class="primary" disabled>Start War</button>
+      </div>
+      <button id="btn-leave-lobby" class="ghost small">Leave</button>
+      <p id="lobby-status" class="status"></p>
+    </div>
+  </section>
+
+  <!-- ── Game ─────────────────────────────────────────────────────────── -->
+  <section id="screen-game" class="screen">
+    <div id="map"></div>
+
+    <header id="hud-top">
+      <button id="btn-menu" class="icon-btn" aria-label="Match menu">☰</button>
+      <div id="resource-bar"></div>
+      <button id="commander-badge" class="commander-badge" aria-label="Open leader profile">★</button>
+    </header>
+
+    <aside id="advisor" class="advisor"></aside>
+    <aside id="feed" class="feed"></aside>
+
+    <div id="panel" class="panel hidden">
+      <div class="panel-head">
+        <h3 id="panel-title">—</h3>
+        <button id="panel-close" class="icon-btn" aria-label="Close">✕</button>
+      </div>
+      <div id="panel-body" class="panel-body"></div>
+    </div>
+
+    <nav id="hud-bottom">
+      <button data-tab="world" class="active">🌍<span>World</span></button>
+      <button data-tab="economy">🏛<span>Economy</span></button>
+      <button data-tab="military">⚔<span>Military</span></button>
+      <button data-tab="research">🔬<span>Research</span></button>
+      <button data-tab="diplomacy">🤝<span>Allies</span><i id="diplo-badge" class="badge hidden"></i></button>
+      <button data-tab="leader">★<span>Leader</span></button>
+    </nav>
+
+    <div id="toast-host" class="toast-host"></div>
+
+    <div id="match-menu" class="menu-overlay hidden">
+      <div class="menu-sheet">
+        <div class="menu-head">
+          <strong>Menu</strong>
+          <button id="menu-close" class="icon-btn" aria-label="Close menu">✕</button>
+        </div>
+        <div class="menu-tabs">
+          <button class="active" data-menutab="tutorials">Tutorials</button>
+          <button data-menutab="settings">Settings</button>
+        </div>
+
+        <div id="menu-tutorials" class="menu-content">
+          <ul class="tutorial-list">
+            <li><strong>Economy</strong> — food feeds your people, oil feeds your industry. Watch the ± rates on the resource bar.</li>
+            <li><strong>Build</strong> — farms and mines first, then a barracks. Buildings unlock stronger units.</li>
+            <li><strong>Combat</strong> — infantry hold ground. Capture needs 5 seconds of uncontested occupation.</li>
+            <li><strong>Research</strong> — one branch at a time; science multiplies everything else.</li>
+            <li><strong>Movement</strong> — tap ➜ Move, then a highlighted neighbour. Routes can cross your own land.</li>
+            <li><strong>Diplomacy</strong> — allies share vision and trade; betrayals are visible to everyone.</li>
+          </ul>
+        </div>
+
+        <div id="menu-settings" class="menu-content hidden">
+          <label class="field"><span>Music volume — <b id="vol-music-val">100%</b></span>
+            <input id="vol-music" type="range" min="0" max="100" value="100" /></label>
+          <label class="field"><span>Sound effects — <b id="vol-sfx-val">100%</b></span>
+            <input id="vol-sfx" type="range" min="0" max="100" value="100" /></label>
+          <div class="chip-row">
+            <button id="mute-music" class="chip">🔇 Mute music</button>
+            <button id="mute-sfx" class="chip">🔇 Mute effects</button>
+          </div>
+        </div>
+
+        <button id="btn-quit" class="primary">Quit to main menu</button>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

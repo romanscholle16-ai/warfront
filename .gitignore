@@ -1,0 +1,20 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.env
+.env.local
+*.log
+
+# Capacitor native projects (generated)
+packages/client/android/
+packages/client/ios/
+
+# Local data
+data/*.db
+data/*.sqlite
+.freebuff/
+
+# Generated TypeScript declarations
+dist-types/
+.freebuff/

@@ -1,0 +1,28 @@
+{
+  "name": "@warfront/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "cap:add:android": "npm run build && npx cap add android",
+    "cap:add:ios": "npm run build && npx cap add ios",
+    "cap:sync": "npm run build && npx cap sync",
+    "android": "npm run cap:sync && npx cap open android",
+    "ios": "npm run cap:sync && npx cap open ios"
+  },
+  "dependencies": {
+    "@warfront/shared": "*",
+    "colyseus.js": "^0.15.26",
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
+    "vite": "^5.3.5"
+  }
+}
