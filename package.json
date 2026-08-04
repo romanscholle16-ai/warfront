@@ -18,7 +18,7 @@
     "typecheck": "tsc -b packages/shared packages/server packages/client",
     "balance": "npm run build:shared && node tools/balance.mjs",
     "integration": "node tools/integration.mjs",
-    "start": "npm run build:shared && npm run build -w @warfront/server && node packages/server/dist/index.js",
+    "start": "node packages/server/dist/index.js",
     "build:server": "npm run build:shared && npm run build -w @warfront/server"
   },
   "devDependencies": {
