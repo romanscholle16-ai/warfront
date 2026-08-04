@@ -1,7 +1,17 @@
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createDefaultLeader } from '@warfront/shared';
+// node:sqlite was added in Node 22.5 — if the runtime is older (e.g. Railway's
+// default Node 20, or a 22.x build compiled without it), the static import would
+// crash the entire module load. Using a dynamic require lets us fail gracefully.
+let DatabaseSync = null;
+try {
+    ({ DatabaseSync } = createRequire(import.meta.url)('node:sqlite'));
+}
+catch {
+    // node:sqlite unavailable — SqliteStorage will throw, getStorage() falls back to memory.
+}
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS players (
   id             TEXT PRIMARY KEY,
@@ -44,6 +54,8 @@ CREATE INDEX IF NOT EXISTS idx_match_players_player ON match_players(player_id);
 `;
 export class SqliteStorage {
     constructor(file) {
+        if (!DatabaseSync)
+            throw new Error('node:sqlite unavailable');
         if (file !== ':memory:')
             mkdirSync(dirname(file), { recursive: true });
         this.db = new DatabaseSync(file);
