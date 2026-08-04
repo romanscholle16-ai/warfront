@@ -55,10 +55,10 @@ export class NetClient {
     if (stored) return stored;
     const { protocol, hostname } = window.location;
     if (protocol === 'file:' || hostname === '' || hostname === 'localhost') {
-      // Running as an APK (file://) or local dev — the user must enter the host
-      // IP in the server field. We still return localhost so the field is not blank
-      // on first launch, but the connection will fail until they change it.
-      return 'ws://localhost:2567';
+      // Running as an APK: connect to the cloud server with zero config.
+      // Local dev (localhost): still default to the cloud so one build works for
+      // everything — override the Server field if you want to run locally.
+      return 'wss://warfrontclient-production.up.railway.app';
     }
     return `${protocol === 'https:' ? 'wss' : 'ws'}://${hostname}:2567`;
   }
