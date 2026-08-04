@@ -13,6 +13,9 @@ const PORT = Number(process.env.PORT ?? 2567);
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.get('/', (_req, res) => {
+    res.json({ ok: true, tickMs: TICK_MS, uptime: process.uptime() });
+});
 app.get('/health', (_req, res) => {
     res.json({ ok: true, tickMs: TICK_MS, uptime: process.uptime() });
 });
