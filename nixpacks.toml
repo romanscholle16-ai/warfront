@@ -2,7 +2,10 @@
 nixPkgs = ["nodejs_22", "nodejs_22.openssl"]
 
 [phases.install]
-cmds = ["npm ci --ignore-scripts"]
+# NOTE: do NOT use --ignore-scripts here. esbuild (used by Vite) downloads its
+# platform binary in a postinstall script; skipping scripts leaves Vite unable to
+# build the client on Linux.
+cmds = ["npm ci"]
 
 [phases.build]
 cmds = ["npm run build:shared", "npm run build -w @warfront/server", "npm run build -w @warfront/client"]
