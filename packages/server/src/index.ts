@@ -1,4 +1,7 @@
 import http from 'node:http';
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
 import colyseus from 'colyseus';
@@ -13,11 +16,19 @@ const { WebSocketTransport } = wsTransport;
 
 const PORT = Number(process.env.PORT ?? 2567);
 
+// The compiled server lives at packages/server/dist — the client build sits one
+// workspace over at packages/client/dist. Served as static files so ONE deployment
+// (e.g. Railway) hosts both the web game and the API/WebSocket server.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CLIENT_DIST = path.resolve(__dirname, '../../client/dist');
+const HAS_CLIENT = fs.existsSync(path.join(CLIENT_DIST, 'index.html'));
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (_req, res) => {
+// API routes first — never shadowed by the SPA fallback.
+app.get('/health', (_req, res) => {
   res.json({ ok: true, tickMs: TICK_MS, uptime: process.uptime() });
 });
 
@@ -71,6 +82,19 @@ app.get('/api/lobby/:code', async (req, res) => {
     phase: room.metadata?.phase ?? 'lobby',
   });
 });
+
+// Serve the built web client (Vite dist) so the same deployment hosts the game
+// and the API. Skipped when dist is absent (local dev runs Vite separately).
+if (HAS_CLIENT) {
+  app.use(express.static(CLIENT_DIST));
+  // SPA fallback: any unknown path that is not an API route gets index.html.
+  app.get(/^\/(?!api\/|health|favicon|assets|src).*/, (_req, res) => {
+    res.sendFile(path.join(CLIENT_DIST, 'index.html'));
+  });
+  console.log(`[server] serving web client from ${CLIENT_DIST}`);
+} else {
+  console.log('[server] client dist not found — API only (run npm run build in packages/client to serve the web game)');
+}
 
 const httpServer = http.createServer(app);
 

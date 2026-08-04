@@ -5,7 +5,7 @@ nixPkgs = ["nodejs_22", "nodejs_22.openssl"]
 cmds = ["npm ci --ignore-scripts"]
 
 [phases.build]
-cmds = []
+cmds = ["npm run build:shared", "npm run build -w @warfront/server", "npm run build -w @warfront/client"]
 
 [phases.start]
 cmd = "node packages/server/dist/index.js"
