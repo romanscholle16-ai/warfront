@@ -28,6 +28,11 @@ export function createMatch(id, code, config) {
         events: [],
         winnerTeam: null,
         nextEntityId: 1,
+        turnPlayer: null,
+        turnNumber: 0,
+        turnSecondsRemaining: 0,
+        turnPhase: null,
+        turnOrder: [],
     };
     for (const def of EARTH_MODERN.territories) {
         state.territories[def.id] = {
@@ -91,15 +96,27 @@ export function removePlayer(state, id) {
 }
 /**
  * Assigns starting territories and a small starting force, then flips the match to
- * `playing`. Starts are taken from the map's pre-spread list so a 2-player match
- * begins on opposite sides of the globe.
+ * `playing`. If players chose territories in the lobby those are honoured first;
+ * otherwise the map's pre-spread list ensures opposite sides of the globe.
  */
-export function startMatch(state) {
+export function startMatch(state, pendingStarts) {
     if (state.phase !== 'lobby')
         return;
     const startList = EARTH_MODERN.starts;
+    const used = new Set();
     state.playerOrder.forEach((playerId, i) => {
-        const territoryId = startList[i % startList.length];
+        // Honour the player's lobby choice, falling back to the spread list.
+        let territoryId = '';
+        if (pendingStarts) {
+            territoryId = pendingStarts.get(playerId) ?? '';
+            // Reject duplicates — if two players pick the same spot only the first gets it.
+            if (territoryId && used.has(territoryId))
+                territoryId = '';
+        }
+        if (!territoryId || !state.territories[territoryId]) {
+            territoryId = startList[i % startList.length];
+        }
+        used.add(territoryId);
         const territory = state.territories[territoryId];
         if (!territory)
             return;

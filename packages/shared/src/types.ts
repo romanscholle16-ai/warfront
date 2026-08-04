@@ -349,9 +349,12 @@ export interface GameEvent {
 
 export type MatchPhase = 'lobby' | 'playing' | 'paused' | 'ended';
 
+export type TurnPhase = 'planning' | 'resolving';
+
 export type GameMode =
   | 'casual' | 'ranked_1v1' | 'ranked_2v2' | 'ranked_4v4'
-  | 'ffa_8' | 'conquest_10';
+  | 'ffa_8' | 'conquest_10' | 'solo_ai'
+  | 'quick_2p' | 'turns_4_6';
 
 export interface MatchConfig {
   mode: GameMode;
@@ -360,9 +363,17 @@ export interface MatchConfig {
   speed: number;
   /** Fraction of the map a player (or team) must hold to win. */
   victoryTerritoryShare: number;
+  /** When true, only total conquest ends the match — every territory must be held. */
+  victoryByConquest: boolean;
   /** Hard cap so a match always terminates; 0 = unlimited. */
   maxTicks: number;
   allowPause: boolean;
+  /** AI difficulty when mode is 'solo_ai'. */
+  aiDifficulty?: 'easy' | 'medium' | 'hard';
+  /** Seconds per turn in turns_4_6 mode. */
+  turnDurationSeconds: number;
+  /** Max players for this match (enforced at lobby level). */
+  maxPlayers: number;
 }
 
 export interface MatchState {
@@ -385,4 +396,11 @@ export interface MatchState {
   events: GameEvent[];
   winnerTeam: number | null;
   nextEntityId: number;
+  /** Turn-based fields (null when real-time). */
+  turnPlayer: string | null;
+  turnNumber: number;
+  turnSecondsRemaining: number;
+  turnPhase: TurnPhase | null;
+  /** Fixed player order for turn-based mode (shuffled at match start). */
+  turnOrder: string[];
 }

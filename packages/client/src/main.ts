@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { LeaderAppearance, LeaderClass } from '@warfront/shared';
+import { EARTH_MODERN } from '@warfront/shared';
 import { NetClient } from './net/NetClient.js';
 import { MapScene } from './game/MapScene.js';
 import { GameUI } from './ui/GameUI.js';
@@ -34,8 +35,6 @@ const classInput = $<HTMLSelectElement>('input-class');
 const codeInput = $<HTMLInputElement>('input-code');
 const serverInput = $<HTMLInputElement>('input-server');
 const uniformInput = $<HTMLSelectElement>('input-uniform');
-const accessoryInput = $<HTMLSelectElement>('input-accessory');
-const flagInput = $<HTMLSelectElement>('input-flag');
 const colourInput = $<HTMLSelectElement>('input-colour');
 const menuStatus = $('menu-status');
 
@@ -43,9 +42,20 @@ nameInput.value = localStorage.getItem('warfront.name') ?? '';
 classInput.value = localStorage.getItem('warfront.class') ?? 'military';
 serverInput.value = NetClient.defaultEndpoint();
 uniformInput.value = localStorage.getItem('warfront.uniform') ?? 'standard';
-accessoryInput.value = localStorage.getItem('warfront.accessory') ?? 'none';
-flagInput.value = localStorage.getItem('warfront.flag') ?? 'plain';
 colourInput.value = localStorage.getItem('warfront.colour') ?? '#e8493f';
+
+// Game-mode selector — AI match with difficulty.
+const modeInput = $<HTMLSelectElement>('input-mode');
+const aiDifficultyRow = $('row-ai-difficulty');
+const aiDifficultyInput = $<HTMLSelectElement>('input-ai-difficulty');
+modeInput.addEventListener('change', () => {
+  const isAi = modeInput.value === 'solo_ai';
+  aiDifficultyRow.classList.toggle('hidden', !isAi);
+  if (!isAi) codeInput.parentElement!.classList.remove('hidden');
+  else codeInput.parentElement!.classList.add('hidden');
+});
+// Run once so the initial state is correct.
+aiDifficultyRow.classList.toggle('hidden', modeInput.value !== 'solo_ai');
 
 function currentIdentity(): { name: string; leaderClass: LeaderClass; endpoint: string; appearance: Partial<LeaderAppearance> } {
   const name = nameInput.value.trim() || 'Commander';
@@ -54,8 +64,8 @@ function currentIdentity(): { name: string; leaderClass: LeaderClass; endpoint: 
   localStorage.setItem('warfront.name', name);
   localStorage.setItem('warfront.class', leaderClass);
   const appearance = {
-    uniform: uniformInput.value, accessory: accessoryInput.value,
-    flag: flagInput.value, colour: colourInput.value,
+    uniform: uniformInput.value, accessory: 'none',
+    flag: 'plain', colour: colourInput.value,
     body: Number(localStorage.getItem('warfront.body') ?? 0),
     face: Number(localStorage.getItem('warfront.face') ?? 0),
     hair: Number(localStorage.getItem('warfront.hair') ?? 0),
@@ -70,9 +80,11 @@ function setStatus(element: HTMLElement, text: string): void {
 
 $('btn-create').addEventListener('click', async () => {
   const { name, leaderClass, endpoint, appearance } = currentIdentity();
+  const mode = modeInput.value;
+  const aiDifficulty = aiDifficultyInput.value;
   setStatus(menuStatus, 'Creating game…');
   try {
-    const code = await net.create(endpoint, name, leaderClass);
+    const code = await net.create(endpoint, name, leaderClass, { mode, aiDifficulty });
     net.setAppearance(appearance);
     enterLobby(code);
   } catch (error) {
@@ -150,6 +162,25 @@ function renderLobby(): void {
   const state = net.state;
   if (!state) return;
   $('lobby-code').textContent = state.code;
+
+  // Starting-territory picker: show to everyone in the lobby, not just the host.
+  const picker = $('lobby-start-pick');
+  if (picker.classList.contains('hidden')) {
+    const select = $<HTMLSelectElement>('input-start-territory');
+    // Populate once per lobby.
+    if (select.options.length <= 1) {
+      for (const territory of EARTH_MODERN.territories) {
+        const option = document.createElement('option');
+        option.value = territory.id;
+        option.textContent = `${territory.name} (${territory.continent})`;
+        select.appendChild(option);
+      }
+    }
+    select.addEventListener('change', () => {
+      if (select.value) net.setStartTerritory(select.value);
+    });
+    picker.classList.remove('hidden');
+  }
 
   const list = $('lobby-players');
   const rows: string[] = [];
@@ -235,16 +266,19 @@ const menuContents: Record<string, HTMLElement> = {
 
 $('btn-menu').addEventListener('click', () => {
   matchMenu.classList.toggle('hidden');
+  mapScene.resetInput();
 });
 
 $('menu-close').addEventListener('click', () => {
   matchMenu.classList.add('hidden');
+  mapScene.resetInput();
 });
 
 matchMenu.addEventListener('click', (event) => {
   // Tapping the dark backdrop closes the menu without leaving the match.
   if (event.target === matchMenu) {
     matchMenu.classList.add('hidden');
+    mapScene.resetInput();
     return;
   }
   const tab = (event.target as HTMLElement).closest('button[data-menutab]');
@@ -285,6 +319,40 @@ function syncAudioUi(): void {
   $('mute-sfx').textContent = audio.sfxMuted ? '🔊 Unmute effects' : '🔇 Mute effects';
 }
 syncAudioUi();
+
+// ── save / load ─────────────────────────────────────────────────────────
+
+const savesList = $('saves-list');
+
+$('btn-save').addEventListener('click', () => {
+  net.saveGame();
+  ui?.toast('Game saved.');
+});
+
+$('btn-load').addEventListener('click', () => {
+  net.listSaves();
+  savesList.classList.toggle('hidden');
+});
+
+// Listen for the saves list coming back.
+net.onSavesList((saves) => {
+  savesList.innerHTML = saves.length
+    ? saves.map((s: { id: string; code: string; savedAt: number }) => `
+        <li>
+          <div class="grow"><strong>${escapeHtml(s.code)}</strong>
+          <span class="tag">${new Date(s.savedAt).toLocaleDateString()}</span></div>
+          <button data-load-save="${s.id}">Load</button>
+        </li>`).join('')
+    : '<li>No saved games.</li>';
+  savesList.classList.remove('hidden');
+});
+
+savesList.addEventListener('click', (event) => {
+  const saveId = (event.target as HTMLElement).closest('button')?.getAttribute('data-load-save');
+  if (!saveId) return;
+  net.loadGame(saveId);
+  savesList.classList.add('hidden');
+});
 
 $('btn-quit').addEventListener('click', async () => {
   try {

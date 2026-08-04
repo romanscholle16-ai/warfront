@@ -170,6 +170,13 @@ export class MatchS extends Schema {
   speed = 1;
   hostId = '';
   winnerTeam = -1;
+  /** Turn-based: current player's id, else empty. */
+  turnPlayer = '';
+  turnNumber = 0;
+  turnSecondsRemaining = 0;
+  turnPhase = '';
+  /** Comma-separated turn order. */
+  turnOrder = '';
   players = new MapSchema<PlayerS>();
   territories = new MapSchema<TerritoryS>();
   armies = new MapSchema<ArmyS>();
@@ -180,6 +187,8 @@ export class MatchS extends Schema {
 defineTypes(MatchS, {
   code: 'string', phase: 'string', tick: 'uint32', mode: 'string', mapId: 'string',
   speed: 'float32', hostId: 'string', winnerTeam: 'int8',
+  turnPlayer: 'string', turnNumber: 'uint16', turnSecondsRemaining: 'float32',
+  turnPhase: 'string', turnOrder: 'string',
   players: { map: PlayerS }, territories: { map: TerritoryS },
   armies: { map: ArmyS }, battles: [BattleS],
   tradeOffers: [TradeOfferS], pings: [PingS],
@@ -234,6 +243,11 @@ export function syncMatch(sim: MatchState, out: MatchS, ready: Map<string, boole
   setIfChanged(out, 'speed', sim.config.speed);
   setIfChanged(out, 'hostId', hostId);
   setIfChanged(out, 'winnerTeam', sim.winnerTeam ?? -1);
+  setIfChanged(out, 'turnPlayer', sim.turnPlayer ?? '');
+  setIfChanged(out, 'turnNumber', sim.turnNumber);
+  setIfChanged(out, 'turnSecondsRemaining', round(sim.turnSecondsRemaining, 1));
+  setIfChanged(out, 'turnPhase', sim.turnPhase ?? '');
+  setIfChanged(out, 'turnOrder', sim.turnOrder.join(','));
 
   // players
   for (const id of sim.playerOrder) {

@@ -111,6 +111,10 @@ export class GameUI {
     this.el.panelClose.addEventListener('click', () => this.closePanel());
     this.el.commander.addEventListener('click', () => this.setTab('leader'));
 
+    // Turn-based: End Turn button.
+    const btnEndTurn = document.getElementById('btn-end-turn');
+    if (btnEndTurn) btnEndTurn.addEventListener('click', () => this.net.endTurn());
+
     const screen = document.getElementById('screen-game')!;
     screen.addEventListener('click', (event) => {
       const button = (event.target as HTMLElement).closest('button[data-action]');
@@ -173,6 +177,7 @@ export class GameUI {
       this.map.highlight([]);
       this.toast(`Advancing on ${TERRITORY_DEFS[territoryId]?.name ?? territoryId}`);
       this.audio.effect('move');
+      this.map.resetInput();
       return;
     }
     this.selectedTerritory = territoryId;
@@ -195,6 +200,7 @@ export class GameUI {
 
     this.renderResources(state);
     this.renderBadge(state);
+    this.renderTurnOverlay(state);
     this.map.setPings([...state.pings]);
     const active = document.activeElement as HTMLElement | null;
     // Never replace a live text box while a player is composing a chat/trade message.
@@ -291,6 +297,28 @@ export class GameUI {
     this.el.feed.innerHTML = this.feedEntries.map((t) => `<div>${escapeHtml(t)}</div>`).join('');
   }
 
+  private renderTurnOverlay(state: MatchView): void {
+    const overlay = document.getElementById('turn-overlay');
+    if (!overlay) return;
+    const isTurnBased = (state.turnOrder?.length ?? 0) > 0;
+    overlay.classList.toggle('hidden', !isTurnBased);
+    if (!isTurnBased) return;
+
+    const label = document.getElementById('turn-label');
+    const nameEl = document.getElementById('turn-player-name');
+    const timerEl = document.getElementById('turn-timer');
+    const endBtn = document.getElementById('btn-end-turn');
+
+    const turnPlayer = state.players.get(state.turnPlayer ?? '');
+    const myTurn = state.turnPlayer === this.net.sessionId;
+
+    if (label) label.textContent = `TURN ${state.turnNumber}`;
+    if (nameEl) nameEl.textContent = turnPlayer ? `${turnPlayer.name}'s turn` : '—';
+    if (timerEl) timerEl.textContent = String(Math.ceil(state.turnSecondsRemaining ?? 0));
+    if (timerEl) timerEl.style.color = (state.turnSecondsRemaining ?? 0) < 15 ? 'var(--accent)' : 'var(--warn)';
+    if (endBtn) endBtn.classList.toggle('hidden', !myTurn || state.turnPhase !== 'planning');
+  }
+
   toast(text: string, bad = false): void {
     const node = document.createElement('div');
     node.className = `toast${bad ? ' bad' : ''}`;
@@ -307,7 +335,7 @@ export class GameUI {
     this.syncNav();
     this.el.panel.dataset.tab = tab;
     if (tab === 'world' && !this.selectedTerritory) this.closePanel();
-    else this.el.panel.classList.remove('hidden');
+    else { this.el.panel.classList.remove('hidden'); this.map.resetInput(); }
     this.render(true);
   }
 
@@ -324,6 +352,7 @@ export class GameUI {
     this.map.select(null);
     this.map.highlight([]);
     this.movingArmyId = null;
+    this.map.resetInput();
   }
 
   private renderPanel(state: MatchView): void {

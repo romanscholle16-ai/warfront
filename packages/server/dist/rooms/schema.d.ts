@@ -119,6 +119,13 @@ export declare class MatchS extends Schema {
     speed: number;
     hostId: string;
     winnerTeam: number;
+    /** Turn-based: current player's id, else empty. */
+    turnPlayer: string;
+    turnNumber: number;
+    turnSecondsRemaining: number;
+    turnPhase: string;
+    /** Comma-separated turn order. */
+    turnOrder: string;
     players: MapSchema<PlayerS, string>;
     territories: MapSchema<TerritoryS, string>;
     armies: MapSchema<ArmyS, string>;

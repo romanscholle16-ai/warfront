@@ -30,6 +30,7 @@ export class NetClient {
   private adviceHandlers: Handler<Suggestion[]>[] = [];
   private overHandlers: Handler<{ winnerTeam: number }>[] = [];
   private leaveHandlers: Handler<number>[] = [];
+  private savesListHandlers: Handler<Array<{ id: string; code: string; savedAt: number }>>[] = [];
 
   /**
    * Default endpoint. In a browser we assume the server sits on the same host as the
@@ -93,13 +94,19 @@ export class NetClient {
     return body.lobbies ?? [];
   }
 
-  async create(endpoint: string, name: string, leaderClass: LeaderClass): Promise<string> {
+  async create(
+    endpoint: string,
+    name: string,
+    leaderClass: LeaderClass,
+    opts?: { mode?: string; aiDifficulty?: string },
+  ): Promise<string> {
     this.endpoint = endpoint;
     localStorage.setItem('warfront.server', endpoint);
     const code = await this.requestCode(endpoint);
     const client = new Client(endpoint);
     this.attach(await client.create<MatchView>('war', {
       code, name, leaderClass, host: true, deviceId: NetClient.deviceId(),
+      mode: opts?.mode, aiDifficulty: opts?.aiDifficulty,
     }));
     return code;
   }
@@ -123,6 +130,7 @@ export class NetClient {
     room.onMessage('advice', (payload: Suggestion[]) => this.adviceHandlers.forEach((h) => h(payload)));
     room.onMessage('match_over', (payload) => this.overHandlers.forEach((h) => h(payload)));
     room.onLeave((code) => this.leaveHandlers.forEach((h) => h(code)));
+    room.onMessage('saves_list', (payload) => this.savesListHandlers.forEach((h) => h(payload)));
 
     // Remember the reconnection token so a reload or a dropped WiFi rejoins the same seat.
     localStorage.setItem('warfront.session', JSON.stringify({
@@ -172,6 +180,26 @@ export class NetClient {
     this.send({ t: 'SET_APPEARANCE', appearance });
   }
 
+  setStartTerritory(territoryId: string): void {
+    this.room?.send('start_territory', { territoryId });
+  }
+
+  saveGame(): void {
+    this.room?.send('save_game');
+  }
+
+  loadGame(saveId: string): void {
+    this.room?.send('load_game', { saveId });
+  }
+
+  listSaves(): void {
+    this.room?.send('list_saves');
+  }
+
+  endTurn(): void {
+    this.room?.send('end_turn');
+  }
+
   async leave(): Promise<void> {
     await this.room?.leave(true);
     this.room = null;
@@ -184,4 +212,5 @@ export class NetClient {
   onAdvice(handler: Handler<Suggestion[]>): void { this.adviceHandlers.push(handler); }
   onMatchOver(handler: Handler<{ winnerTeam: number }>): void { this.overHandlers.push(handler); }
   onLeave(handler: Handler<number>): void { this.leaveHandlers.push(handler); }
+  onSavesList(handler: Handler<Array<{ id: string; code: string; savedAt: number }>>): void { this.savesListHandlers.push(handler); }
 }

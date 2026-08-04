@@ -82,8 +82,11 @@ export const DEFAULT_MATCH_CONFIG = {
     mapId: 'earth_modern',
     speed: 1,
     victoryTerritoryShare: 0.6,
+    victoryByConquest: true,
     maxTicks: 0,
     allowPause: true,
+    turnDurationSeconds: 90,
+    maxPlayers: 10,
 };
 /** Player colours, assigned by slot. Chosen to stay distinguishable on small screens. */
 export const PLAYER_COLOURS = [

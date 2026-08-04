@@ -7,6 +7,13 @@ import obama from '../assets/leaders/obama.jpg';
 import pelosi from '../assets/leaders/pelosi.jpg';
 import reagan from '../assets/leaders/reagan.jpg';
 import trump from '../assets/leaders/trump.jpg';
+import hitler from '../assets/leaders/hitler.jpg';
+import stalin from '../assets/leaders/stalin.jpg';
+import kim from '../assets/leaders/kim.jpg';
+import xi from '../assets/leaders/xi.jpg';
+import castro from '../assets/leaders/castro.jpg';
+import napoleon from '../assets/leaders/napoleon.jpg';
+import genghis from '../assets/leaders/genghis.jpg';
 
 /**
  * Cosmetic catalogue (M9 / monetization groundwork).
@@ -59,7 +66,7 @@ export const COLOURS: string[] = [
   '#e87f3f', '#3fd0d0', '#d03f9c', '#7f8fa6', '#b5e83f',
 ];
 
-export const PORTRAIT_COUNT = 8;
+export const PORTRAIT_COUNT = 15;
 
 /**
  * Real-leader avatars. `face` is the index stored in `appearance.face`, so the
@@ -87,6 +94,14 @@ export const LEADER_STYLES: LeaderStyleDef[] = [
   { id: 'reagan', name: 'Ronald Reagan', title: '40th President', blurb: 'The great communicator', face: 5, img: reagan, uniform: 'ceremonial', accessory: 'none', flag: 'bars' },
   { id: 'harris', name: 'Kamala Harris', title: '49th Vice President', blurb: 'First in line', face: 6, img: harris, uniform: 'standard', accessory: 'none', flag: 'plain' },
   { id: 'pelosi', name: 'Nancy Pelosi', title: 'Speaker Emerita', blurb: 'Commands the chamber', face: 7, img: pelosi, uniform: 'standard', accessory: 'none', flag: 'tricolor' },
+  // ── World leaders (replace SVGs with real portraits when available) ───
+  { id: 'hitler', name: 'Adolf Hitler', title: 'Führer of Germany', blurb: 'Blitzkrieg architect', face: 8, img: hitler, uniform: 'field', accessory: 'none', flag: 'bars' },
+  { id: 'stalin', name: 'Joseph Stalin', title: 'Man of Steel', blurb: 'Industrial war machine', face: 9, img: stalin, uniform: 'winter', accessory: 'none', flag: 'star' },
+  { id: 'kim', name: 'Kim Jong Un', title: 'Supreme Leader', blurb: 'Nuclear deterrent', face: 10, img: kim, uniform: 'standard', accessory: 'none', flag: 'star' },
+  { id: 'xi', name: 'Xi Jinping', title: 'Paramount Leader', blurb: 'Belt and road dominance', face: 11, img: xi, uniform: 'standard', accessory: 'none', flag: 'star' },
+  { id: 'castro', name: 'Fidel Castro', title: 'El Comandante', blurb: 'Guerrilla revolutionary', face: 12, img: castro, uniform: 'field', accessory: 'beret', flag: 'plain' },
+  { id: 'napoleon', name: 'Napoleon', title: 'Emperor of France', blurb: 'Master of artillery', face: 13, img: napoleon, uniform: 'ceremonial', accessory: 'none', flag: 'tricolor' },
+  { id: 'genghis', name: 'Genghis Khan', title: 'Great Khan', blurb: 'Horde commander', face: 14, img: genghis, uniform: 'desert', accessory: 'none', flag: 'plain' },
 ];
 
 /** The portrait element for an appearance — a real photo, not an emoji. */

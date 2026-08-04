@@ -95,9 +95,21 @@ function checkVictory(state: MatchState): void {
     byTeam.set(player.team, (byTeam.get(player.team) ?? 0) + held);
   }
 
-  for (const [team, held] of byTeam) {
-    if (held / totalTerritories >= state.config.victoryTerritoryShare) {
-      return endMatch(state, team, 'domination');
+  // Total conquest: own every last territory.
+  if (state.config.victoryByConquest) {
+    for (const [team, held] of byTeam) {
+      if (held >= totalTerritories) {
+        return endMatch(state, team, 'total_conquest');
+      }
+    }
+  }
+
+  // Territory-share victory (backup when conquest is off).
+  if (!state.config.victoryByConquest) {
+    for (const [team, held] of byTeam) {
+      if (held / totalTerritories >= state.config.victoryTerritoryShare) {
+        return endMatch(state, team, 'domination');
+      }
     }
   }
 

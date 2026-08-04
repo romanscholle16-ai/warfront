@@ -17,6 +17,10 @@ interface JoinOptions {
      * to a real account without changing anything else.
      */
     deviceId?: string;
+    /** Host's chosen starting territory id. */
+    startTerritory?: string;
+    /** AI difficulty when mode is 'solo_ai'. */
+    aiDifficulty?: 'easy' | 'medium' | 'hard';
 }
 /**
  * One room = one match. This class is the ONLY place a match is mutated, and it
@@ -33,6 +37,10 @@ export declare class WarRoom extends Room<MatchS> {
     private endedAnnounced;
     /** sessionId → deviceId, so leader progress lands on the right persistent profile. */
     private deviceIds;
+    /** sessionId → chosen starting territory. */
+    private pendingStarts;
+    /** Commands queued during the current turn-based planning phase. */
+    private queuedCommands;
     private storage;
     /** Wall-clock is read here and only here — the simulation never touches a clock. */
     private now;
@@ -41,20 +49,39 @@ export declare class WarRoom extends Room<MatchS> {
     onLeave(client: Client, consented: boolean): Promise<void>;
     onDispose(): void;
     private step;
+    private stepTurnBased;
+    private advanceTurn;
+    private resolveTurn;
+    private handleEndTurn;
     /**
      * Writes leader progress and the match record. XP was already committed into each
      * leader by the simulation when the match ended, so this only persists the result.
      */
     private persistResults;
     /**
-     * Disconnected players are held by a deliberately passive AI: it never attacks and
-     * never spends, so being disconnected is a disadvantage but not a free win for
-     * anyone else. A real opponent AI (Phase 2) will use the same advisor commands.
+     * Rule-based AI opponent.
+     *
+     * Every 5 seconds the AI evaluates its situation and issues commands directly
+     * against the simulation — no advisor dependency. Each difficulty tier follows
+     * stricter strategic rules.
      */
     private runCaretakers;
+    /** Passive AI for disconnected players: train when possible, defend borders. */
+    private aiDefendAndTrain;
+    /** Full AI for solo mode — fast, aggressive, covers the entire game lifecycle. */
+    private aiAct;
+    private aiAttack;
+    private aiStances;
+    private aiResearch;
+    private aiSpendSkill;
+    private aiTrain;
+    private aiBuild;
     private flushEvents;
     private handleCommand;
     private handleStart;
+    private handleSaveGame;
+    private handleLoadGame;
+    private handleListSaves;
     private handlePause;
     private handleLeaderUpdate;
     private persistLeader;

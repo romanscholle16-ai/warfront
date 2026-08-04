@@ -255,11 +255,16 @@ export class MapScene extends Phaser.Scene {
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       const camera = this.cameras.main;
-      const p1 = this.input.pointer1;
-      const p2 = this.input.pointer2;
 
-      if (p1.isDown && p2.isDown) {
-        const distance = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
+      // Pinch zoom — only when both fingers are down AND we are in an active drag.
+      // (Without the `dragging` guard, a stale pointer stuck after a DOM overlay
+      // steals a pointerup event would cause single-finger moves to zoom instead of
+      // pan and lock the player out of map interaction.)
+      if (this.dragging && this.input.pointer1.isDown && this.input.pointer2.isDown) {
+        const distance = Phaser.Math.Distance.Between(
+          this.input.pointer1.x, this.input.pointer1.y,
+          this.input.pointer2.x, this.input.pointer2.y,
+        );
         if (this.pinchDistance > 0) {
           const scale = distance / this.pinchDistance;
           camera.setZoom(Phaser.Math.Clamp(camera.zoom * scale, this.fitZoom() * 0.8, 4));
@@ -289,6 +294,31 @@ export class MapScene extends Phaser.Scene {
       const camera = this.cameras.main;
       camera.setZoom(Phaser.Math.Clamp(camera.zoom * (dy > 0 ? 0.9 : 1.1), this.fitZoom() * 0.8, 4));
     });
+
+    // If the pointer leaves the canvas entirely (e.g. while a browser menu or OS
+    // notification steals focus), reset the drag state so stale pointers cannot wedge
+    // pinch detection.  Without this a single finger reads as two-finger pinch and
+    // the map becomes unresponsive until a page reload.
+    this.input.on('gameout', () => {
+      this.resetInput();
+    });
+  }
+
+  /**
+   * Release all input state — called by GameUI whenever a DOM panel or overlay
+   * opens, because a pointerup event stolen by the overlay will otherwise leave
+   * Phaser's pointer tracking in a wedged state.
+   */
+  resetInput(): void {
+    this.dragging = false;
+    this.pinchDistance = 0;
+    this.dragMoved = 0;
+    // Force-release any stale pointers.  Without this a two-finger pinch
+    // interrupted by a DOM overlay would leave pointer2.isDown stuck at true,
+    // and the next single-finger touch reads as a pinch again.
+    for (const pointer of this.input.manager.pointers) {
+      pointer.isDown = false;
+    }
   }
 
   private handleTap(pointer: Phaser.Input.Pointer): void {

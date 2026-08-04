@@ -27,6 +27,16 @@ export interface Storage {
     loadProfile(deviceId: string, fallbackName: string): PlayerProfile;
     saveLeader(deviceId: string, leader: Leader): void;
     recordMatch(matchId: string, code: string, mode: string, results: MatchResultRow[]): void;
+    saveGame(id: string, code: string, hostDeviceId: string, stateJson: string): void;
+    loadGame(id: string): {
+        code: string;
+        stateJson: string;
+    } | null;
+    listSavedGames(hostDeviceId: string): Array<{
+        id: string;
+        code: string;
+        savedAt: number;
+    }>;
     close(): void;
 }
 export declare class SqliteStorage implements Storage {
@@ -36,6 +46,16 @@ export declare class SqliteStorage implements Storage {
     saveLeader(deviceId: string, leader: Leader): void;
     private writeLeader;
     recordMatch(matchId: string, code: string, mode: string, results: MatchResultRow[]): void;
+    saveGame(id: string, code: string, hostDeviceId: string, stateJson: string): void;
+    loadGame(id: string): {
+        code: string;
+        stateJson: string;
+    } | null;
+    listSavedGames(hostDeviceId: string): Array<{
+        id: string;
+        code: string;
+        savedAt: number;
+    }>;
     close(): void;
 }
 /** Used when persistence is disabled — every method is a no-op, nothing else changes. */
@@ -44,6 +64,9 @@ export declare class MemoryStorage implements Storage {
     loadProfile(deviceId: string, fallbackName: string): PlayerProfile;
     saveLeader(deviceId: string, leader: Leader): void;
     recordMatch(): void;
+    saveGame(): void;
+    loadGame(): null;
+    listSavedGames(): [];
     close(): void;
 }
 /** Ranks players by territories held, so the match record has a real placement. */

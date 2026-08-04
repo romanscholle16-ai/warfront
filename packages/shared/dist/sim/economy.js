@@ -2,7 +2,7 @@ import { RESOURCE_KEYS } from '../types.js';
 import { BUILDINGS, buildingYield } from '../config/buildings.js';
 import { UNITS } from '../config/units.js';
 import { BATTLE_POP_DAMAGE_PER_MINUTE, POP_BASE_GROWTH_PER_MINUTE, POP_FOOD_UPKEEP_PER_1K_PER_MINUTE, POP_INCOME_PER_1K_PER_MINUTE, POP_MAX_PER_SLOT, POP_STARVATION_RATE, TERRAIN_YIELD_MUL, TERRITORY_BASE_YIELD, UNREST_DECAY_PER_MINUTE, perTick, } from '../config/constants.js';
-import { emptyResources, territoryDef } from './state.js';
+import { emptyResources, ownedTerritoryCount, territoryDef } from './state.js';
 /**
  * Gross per-minute yield of one territory: terrain × economy weight × buildings,
  * suppressed by unrest in freshly conquered land.
@@ -68,6 +68,10 @@ export function computeIncome(state, player) {
     gross.oil *= m.oilMul;
     gross.materials *= m.materialsMul;
     gross.research *= m.researchMul;
+    // Empire bonus: holding 10+ territories grants +5 % money.
+    if (ownedTerritoryCount(state, player.id) >= 10) {
+        gross.money *= 1.05;
+    }
     const upkeep = playerUpkeep(state, player.id);
     for (const key of RESOURCE_KEYS)
         gross[key] -= upkeep[key] * m.upkeepMul;

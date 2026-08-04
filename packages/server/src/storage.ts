@@ -45,6 +45,9 @@ export interface Storage {
   loadProfile(deviceId: string, fallbackName: string): PlayerProfile;
   saveLeader(deviceId: string, leader: Leader): void;
   recordMatch(matchId: string, code: string, mode: string, results: MatchResultRow[]): void;
+  saveGame(id: string, code: string, hostDeviceId: string, stateJson: string): void;
+  loadGame(id: string): { code: string; stateJson: string } | null;
+  listSavedGames(hostDeviceId: string): Array<{ id: string; code: string; savedAt: number }>;
   close(): void;
 }
 
@@ -87,6 +90,14 @@ CREATE TABLE IF NOT EXISTS match_players (
 );
 
 CREATE INDEX IF NOT EXISTS idx_match_players_player ON match_players(player_id);
+
+CREATE TABLE IF NOT EXISTS saved_games (
+  id              TEXT PRIMARY KEY,
+  code            TEXT NOT NULL,
+  host_device_id  TEXT NOT NULL,
+  saved_at        INTEGER NOT NULL,
+  state_json      TEXT NOT NULL
+);
 `;
 
 export class SqliteStorage implements Storage {
@@ -185,6 +196,32 @@ export class SqliteStorage implements Storage {
     }
   }
 
+  saveGame(id: string, code: string, hostDeviceId: string, stateJson: string): void {
+    this.db.prepare(
+      `INSERT OR REPLACE INTO saved_games (id, code, host_device_id, saved_at, state_json)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(id, code, hostDeviceId, Date.now(), stateJson);
+  }
+
+  loadGame(id: string): { code: string; stateJson: string } | null {
+    const row = this.db.prepare(
+      'SELECT code, state_json FROM saved_games WHERE id = ?',
+    ).get(id) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return { code: String(row.code ?? ''), stateJson: String(row.state_json ?? '') };
+  }
+
+  listSavedGames(hostDeviceId: string): Array<{ id: string; code: string; savedAt: number }> {
+    const rows = this.db.prepare(
+      'SELECT id, code, saved_at FROM saved_games WHERE host_device_id = ? ORDER BY saved_at DESC LIMIT 10',
+    ).all(hostDeviceId) as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      id: String(r.id ?? ''),
+      code: String(r.code ?? ''),
+      savedAt: Number(r.saved_at ?? 0),
+    }));
+  }
+
   close(): void {
     this.db.close();
   }
@@ -214,6 +251,9 @@ export class MemoryStorage implements Storage {
   }
 
   recordMatch(): void { /* nothing to do */ }
+  saveGame(): void { /* nothing to do */ }
+  loadGame(): null { return null; }
+  listSavedGames(): [] { return []; }
   close(): void { /* nothing to do */ }
 }
 

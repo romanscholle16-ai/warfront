@@ -8,10 +8,10 @@ export declare function addPlayer(state: MatchState, id: string, name: string, o
 export declare function removePlayer(state: MatchState, id: string): void;
 /**
  * Assigns starting territories and a small starting force, then flips the match to
- * `playing`. Starts are taken from the map's pre-spread list so a 2-player match
- * begins on opposite sides of the globe.
+ * `playing`. If players chose territories in the lobby those are honoured first;
+ * otherwise the map's pre-spread list ensures opposite sides of the globe.
  */
-export declare function startMatch(state: MatchState): void;
+export declare function startMatch(state: MatchState, pendingStarts?: ReadonlyMap<string, string>): void;
 export declare function nextId(state: MatchState, prefix: string): string;
 export declare function createArmy(state: MatchState, ownerId: string, at: string, units: UnitCounts): Army;
 /** The stationary army a player has in a territory, if any — where new units land. */

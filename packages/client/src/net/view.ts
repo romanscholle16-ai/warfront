@@ -122,6 +122,11 @@ export interface MatchView {
   speed: number;
   hostId: string;
   winnerTeam: number;
+  turnPlayer: string | null;
+  turnNumber: number;
+  turnSecondsRemaining: number;
+  turnPhase: string | null;
+  turnOrder: string[];
   players: MapView<PlayerView>;
   territories: MapView<TerritoryView>;
   armies: MapView<ArmyView>;
