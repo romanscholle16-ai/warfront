@@ -58,7 +58,7 @@ export class NetClient {
       // Running as an APK: connect to the cloud server with zero config.
       // Local dev (localhost): still default to the cloud so one build works for
       // everything — override the Server field if you want to run locally.
-      return 'wss://warfrontclient-production.up.railway.app';
+      return 'wss://warfrontserver-production.up.railway.app';
     }
     return `${protocol === 'https:' ? 'wss' : 'ws'}://${hostname}:2567`;
   }
