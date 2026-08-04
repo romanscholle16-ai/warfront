@@ -222,6 +222,7 @@ describe('stability', () => {
 
   it('ends the match when one team holds the victory share', () => {
     const state = newMatch(2);
+    state.config.victoryByConquest = false;
     state.config.victoryTerritoryShare = 0.05; // 3 of 48 territories
     for (const t of Object.values(state.territories).slice(0, 5)) t.ownerId = 'p0';
     tick(state);

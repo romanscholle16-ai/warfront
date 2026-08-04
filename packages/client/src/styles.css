@@ -541,6 +541,17 @@ button.small { min-height: 38px; padding: 8px; font-size: 13px; }
 }
 .btn-end-turn:active { transform: translateY(1px); }
 
+.btn-attack {
+  width: auto; min-height: 38px; min-width: 100px;
+  padding: 6px 14px;
+  background: linear-gradient(#8a1810, #5a0d0a);
+  border: 1px solid #d44; border-radius: 8px;
+  font-family: var(--stencil); letter-spacing: 2px;
+  font-size: 13px; color: var(--text); cursor: pointer;
+  box-shadow: 0 0 12px #e8493f44;
+}
+.btn-attack:active { transform: translateY(1px); }
+
 /* ── in-match menu (☰): tutorials, settings, quit ──────────────────────── */
 
 .menu-overlay {

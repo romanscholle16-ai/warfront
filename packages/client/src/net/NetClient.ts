@@ -54,14 +54,11 @@ export class NetClient {
   static defaultEndpoint(): string {
     const stored = localStorage.getItem('warfront.server');
     if (stored) return stored;
-    const { protocol, hostname } = window.location;
-    if (protocol === 'file:' || hostname === '' || hostname === 'localhost') {
-      // Running as an APK: connect to the cloud server with zero config.
-      // Local dev (localhost): still default to the cloud so one build works for
-      // everything — override the Server field if you want to run locally.
-      return 'wss://warfrontserver-production.up.railway.app';
-    }
-    return `${protocol === 'https:' ? 'wss' : 'ws'}://${hostname}:2567`;
+    // Always connect to the cloud server (APK, phone browser, desktop browser).
+    // Railway routes its public domain (port 443) to the app's internal PORT
+    // (8080), so NO port is appended here — appending :2567 would break the
+    // production build by pointing at the wrong host/port.
+    return 'wss://warfrontserver-production.up.railway.app';
   }
 
   get sessionId(): string {
@@ -198,6 +195,10 @@ export class NetClient {
 
   endTurn(): void {
     this.room?.send('end_turn');
+  }
+
+  flushQueue(): void {
+    this.room?.send('flush_queue');
   }
 
   async leave(): Promise<void> {

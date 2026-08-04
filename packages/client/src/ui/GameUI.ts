@@ -114,6 +114,8 @@ export class GameUI {
     // Turn-based: End Turn button.
     const btnEndTurn = document.getElementById('btn-end-turn');
     if (btnEndTurn) btnEndTurn.addEventListener('click', () => this.net.endTurn());
+    const btnAttack = document.getElementById('btn-attack');
+    if (btnAttack) btnAttack.addEventListener('click', () => this.net.flushQueue());
 
     const screen = document.getElementById('screen-game')!;
     screen.addEventListener('click', (event) => {
@@ -307,16 +309,38 @@ export class GameUI {
     const label = document.getElementById('turn-label');
     const nameEl = document.getElementById('turn-player-name');
     const timerEl = document.getElementById('turn-timer');
+    const phaseEl = document.getElementById('turn-phase-label');
+    const attackBtn = document.getElementById('btn-attack');
     const endBtn = document.getElementById('btn-end-turn');
 
     const turnPlayer = state.players.get(state.turnPlayer ?? '');
     const myTurn = state.turnPlayer === this.net.sessionId;
+    const phase = state.turnPhase ?? 'planning';
 
     if (label) label.textContent = `TURN ${state.turnNumber}`;
     if (nameEl) nameEl.textContent = turnPlayer ? `${turnPlayer.name}'s turn` : '—';
     if (timerEl) timerEl.textContent = String(Math.ceil(state.turnSecondsRemaining ?? 0));
     if (timerEl) timerEl.style.color = (state.turnSecondsRemaining ?? 0) < 15 ? 'var(--accent)' : 'var(--warn)';
-    if (endBtn) endBtn.classList.toggle('hidden', !myTurn || state.turnPhase !== 'planning');
+
+    // Phase label
+    if (phaseEl) {
+      const labels: Record<string, string> = {
+        planning: 'planning phase — train, build, then attack',
+        post_attack: 'post-attack — move troops, attack again, or end turn',
+        resolving: 'resolving…',
+      };
+      phaseEl.textContent = labels[phase] ?? phase;
+    }
+
+    // Attack button: visible during planning and post_attack
+    if (attackBtn) {
+      attackBtn.classList.toggle('hidden', !myTurn || (phase !== 'planning' && phase !== 'post_attack'));
+    }
+
+    // End Turn button: visible during planning and post_attack
+    if (endBtn) {
+      endBtn.classList.toggle('hidden', !myTurn || (phase !== 'planning' && phase !== 'post_attack'));
+    }
   }
 
   toast(text: string, bad = false): void {

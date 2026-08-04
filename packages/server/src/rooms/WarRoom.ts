@@ -10,7 +10,7 @@ import {
   RESOURCE_KEYS, TERRITORY_DEFS, UNITS, RateLimiter, TICK_MS,
   addPlayer, addEvent, applyCommand, availableTechs, buildingCost, canAfford,
   createMatch, deserializeMatch, getSuggestions, moveBlocker, removePlayer,
-  refreshModifiers, serializeMatch, startMatch, tick as simTick,
+  refreshModifiers, serializeMatch, startMatch, validateCommand, tick as simTick,
 } from '@warfront/shared';
 import type {
   Army, BuildingType, Command, GameEvent, GameMode, LeaderClass, MatchState,
@@ -85,6 +85,7 @@ export class WarRoom extends Room<MatchS> {
     });
     this.onMessage('start', (client) => this.handleStart(client));
     this.onMessage('end_turn', (client) => this.handleEndTurn(client));
+    this.onMessage('flush_queue', (client) => this.handleFlushQueue(client));
     this.onMessage('pause', (client) => this.handlePause(client, true));
     this.onMessage('resume', (client) => this.handlePause(client, false));
     this.onMessage('leader', (client, payload: { name?: string; leaderClass?: LeaderClass }) => {
@@ -255,28 +256,60 @@ export class WarRoom extends Room<MatchS> {
   private resolveTurn(): void {
     this.sim.turnPhase = 'resolving';
 
-    // Execute all queued commands for the current player in one batch.
+    // Apply any remaining queued commands.
     for (const cmd of this.queuedCommands) {
       applyCommand(this.sim, this.sim.turnPlayer!, cmd);
     }
     this.queuedCommands = [];
 
-    // Run a burst of simulation ticks equal to the turn duration so armies travel,
-    // buildings complete, etc. in a single resolution step.
-    const burstTicks = Math.round(this.sim.config.turnDurationSeconds * 5); // 5 ticks/sec
+    // Run simulation for the remainder of the turn (travel, building, economy).
+    // Use fewer ticks if the player already flushed mid-turn.
+    const remainingTicks = Math.round(this.sim.turnSecondsRemaining * 5);
+    const burstTicks = Math.max(10, remainingTicks);
     for (let i = 0; i < burstTicks; i++) {
       this.sim.tick++;
       simTick(this.sim);
     }
 
-    // Advance to the next player.
     this.advanceTurn();
+  }
+
+  /**
+   * Flush queued commands and run simulation ticks to resolve battles.
+   * Called when the player clicks "Attack" during their turn.
+   * After flushing, the player enters post_attack phase where they can
+   * move troops and attack again, or end their turn.
+   */
+  private handleFlushQueue(client: Client): void {
+    if (this.sim.turnOrder.length === 0) return;
+    if (client.sessionId !== this.sim.turnPlayer) return;
+    if (this.sim.turnPhase !== 'planning' && this.sim.turnPhase !== 'post_attack') return;
+
+    // Apply all queued commands.
+    for (const cmd of this.queuedCommands) {
+      applyCommand(this.sim, this.sim.turnPlayer!, cmd);
+    }
+    this.queuedCommands = [];
+
+    // Run simulation ticks to resolve battles. Run enough ticks for armies
+    // to travel adjacent territories and battles to conclude.
+    // 50 ticks = 10 seconds of combat at 5Hz, enough for most fights.
+    const flushTicks = 50;
+    for (let i = 0; i < flushTicks; i++) {
+      this.sim.tick++;
+      simTick(this.sim);
+    }
+
+    // Player can now move troops or attack again.
+    this.sim.turnPhase = 'post_attack';
+    addEvent(this.sim, 'chat', this.sim.turnPlayer,
+      'Battles resolved. You may move troops and attack again, or end your turn.');
   }
 
   private handleEndTurn(client: Client): void {
     if (this.sim.turnOrder.length === 0) return;
     if (client.sessionId !== this.sim.turnPlayer) return;
-    if (this.sim.turnPhase !== 'planning') return;
+    if (this.sim.turnPhase !== 'planning' && this.sim.turnPhase !== 'post_attack') return;
     this.resolveTurn();
   }
 
@@ -360,10 +393,17 @@ export class WarRoom extends Room<MatchS> {
     console.log(`[AI ${difficulty}] ${player.name} | territories=${before.territoryCount} | money=${before.money.toFixed(0)} | tick=${this.sim.tick}`);
   }
 
-  // ── attack: send ALL eligible armies, split large stacks, random targets ─
+  // ── attack: always press enemies, route through own territory, split stacks ─
 
   private aiAttack(player: Player, rules: AIDifficultyRules): void {
-    const attackEnemies = Math.random() < rules.aggression;
+    const alwaysAttack = rules.aggression >= 1.0;
+    const attackEnemies = alwaysAttack || Math.random() < rules.aggression;
+
+    // Build a set of territories this player owns for fast lookups.
+    const owned = new Set<string>();
+    for (const t of Object.values(this.sim.territories)) {
+      if (t.ownerId === player.id) owned.add(t.id);
+    }
 
     // Track targets that already have armies en route.
     const targeted = new Set<string>();
@@ -392,28 +432,139 @@ export class WarRoom extends Room<MatchS> {
         });
       }
 
+      // When the army is mixed land+sea and blocked from land neighbours,
+      // detach the sea-capable units so they can cross on their own.
+      if (moveBlocker(this.sim, army, (ADJACENCY[army.at] ?? [])[0]?.to ?? '')) {
+        const seaUnits: UnitCounts = {};
+        let hasSea = false;
+        for (const [unitId, count] of Object.entries(army.units)) {
+          if (!count) continue;
+          const unit = UNITS[unitId as UnitType];
+          if (unit && (unit.domain === 'sea' || unitId === 'marine')) {
+            seaUnits[unitId as UnitType] = count;
+            hasSea = true;
+          }
+        }
+        if (hasSea && Object.keys(seaUnits).length > 0) {
+          applyCommand(this.sim, player.id, {
+            t: 'SPLIT_ARMY', armyId: army.id, units: seaUnits,
+          });
+          console.log(`[AI] ${player.name} detached naval force from ${army.at}`);
+        }
+      }
+
       const neighbours = (ADJACENCY[army.at] ?? []).map((l) => l.to);
       shuffle(neighbours);
 
+      // Find the best target: enemy > neutral. Try direct neighbours first.
+      let bestTarget: string | null = null;
       for (const n of neighbours) {
-        // Skip if we already have an army heading there.
         if (targeted.has(n)) continue;
-        // Skip if the army can't traverse this link (sea link with no marines).
         if (moveBlocker(this.sim, army, n)) continue;
         const t = this.sim.territories[n];
         if (!t) continue;
-        // Neutral = always fair game; enemy = only if aggression passes.
-        if (t.ownerId && t.ownerId === player.id) continue; // own territory
-        if (t.ownerId && !attackEnemies) continue; // enemy but aggression check failed
+        if (t.ownerId === player.id) continue;
+        // Enemy territory — highest priority if aggression allows.
+        if (t.ownerId && attackEnemies) { bestTarget = n; break; }
+        // Neutral territory — fallback.
+        if (!t.ownerId && !bestTarget) bestTarget = n;
+      }
 
+      // If no direct reachable target, try routing through own territory.
+      // Walk the ownership graph to find a path to an enemy border.
+      if (!bestTarget && attackEnemies) {
+        bestTarget = this.findReachableEnemy(player.id, army, owned, targeted);
+      }
+
+      if (bestTarget) {
         applyCommand(this.sim, player.id, {
-          t: 'MOVE_ARMY', armyId: army.id, toTerritoryId: n,
+          t: 'MOVE_ARMY', armyId: army.id, toTerritoryId: bestTarget,
         });
-        console.log(`[AI] ${player.name} attacking ${n} with ${total} units from ${army.at}`);
-        targeted.add(n);
-        break; // one target per army, try next army
+        console.log(`[AI] ${player.name} attacking ${bestTarget} with ${total} units from ${army.at}`);
+        targeted.add(bestTarget);
       }
     }
+  }
+
+  /**
+   * BFS through the player's own territory to find an enemy/neutral border
+   * that this army can reach. This is how the AI breaks out of a sea-locked
+   * region: march the army through owned land to a coastal territory with
+   * marines or ships, then cross.
+   */
+  private findReachableEnemy(
+    playerId: string,
+    army: Army,
+    owned: Set<string>,
+    targeted: Set<string>,
+  ): string | null {
+    // BFS queue: [territoryId]
+    const visited = new Set<string>([army.at]);
+    const queue = [army.at];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const links = ADJACENCY[current] ?? [];
+      shuffle(links.map((l) => l.to));
+
+      for (const link of links) {
+        const next = link.to;
+        if (visited.has(next)) continue;
+        visited.add(next);
+
+        const t = this.sim.territories[next];
+        if (!t) continue;
+
+        // Enemy or neutral territory — this is where we want to go.
+        if (t.ownerId !== playerId && !targeted.has(next)) {
+          // But we can only attack if there's a legal path from the army to this tile.
+          // The first hop from army.at must be passable — subsequent hops through
+          // owned land are always legal.
+          if (current === army.at) {
+            // Direct neighbour — already checked in the main loop.
+            return next;
+          }
+          // This is a border tile reachable via owned territory.
+          // The army first moves to the adjacent owned tile, then the server's
+          // waypoint system will route it the rest of the way.
+          return this.firstHopToward(army, next);
+        }
+
+        // Own territory — continue the search.
+        if (t.ownerId === playerId) {
+          queue.push(next);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Find the first legal hop from the army toward the target.
+   * Only returns a hop the army can actually traverse (respects moveBlocker).
+   */
+  private firstHopToward(army: Army, targetId: string): string | null {
+    // Try each passable neighbour — BFS from there through owned territory.
+    for (const link of ADJACENCY[army.at] ?? []) {
+      const firstHop = link.to;
+      if (moveBlocker(this.sim, army, firstHop)) continue;
+
+      // BFS from firstHop to targetId, walking through any territory.
+      const visited = new Set<string>([army.at, firstHop]);
+      const queue = [firstHop];
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        if (current === targetId) return firstHop;
+        for (const nextLink of ADJACENCY[current] ?? []) {
+          const next = nextLink.to;
+          if (visited.has(next)) continue;
+          visited.add(next);
+          if (this.sim.territories[next]) queue.push(next);
+        }
+      }
+    }
+    return null;
   }
 
   // ── stances: aggressive for attackers, hold for border garrisons ───────
@@ -487,12 +638,12 @@ export class WarRoom extends Room<MatchS> {
     }
   }
 
-  // ── train: all unit types, all territories, multiple batches ───────────
+  // ── train: prioritise sea-crossing units when locked in, heavy on vehicles ─
 
   private aiTrain(player: Player, rules: AIDifficultyRules): void {
     if (player.resources.money < rules.trainReserve) return;
+    const seaLocked = this.isSeaLocked(player.id);
 
-    // Collect every territory with ANY military building.
     const factories: Array<{ tid: string; units: UnitType[] }> = [];
     for (const territory of Object.values(this.sim.territories)) {
       if (territory.ownerId !== player.id || territory.pop < 2) continue;
@@ -524,8 +675,20 @@ export class WarRoom extends Room<MatchS> {
     for (const { tid, units } of factories) {
       if (trained >= rules.trainBatches) break;
       const territory = this.sim.territories[tid]!;
-      shuffle(units);
 
+      // When sea-locked, prioritise marine and naval units. Don't shuffle
+      // after sorting — that would undo the priority.
+      const seaUnits = units.filter((u) => u === 'marine' || UNITS[u]?.domain === 'sea');
+      const otherUnits = units.filter((u) => u !== 'marine' && UNITS[u]?.domain !== 'sea');
+      if (seaLocked) {
+        // Sea units first, shuffle within each group for variety.
+        shuffle(seaUnits);
+        shuffle(otherUnits);
+        units.length = 0;
+        units.push(...seaUnits, ...otherUnits);
+      } else {
+        shuffle(units);
+      }
       for (const unit of units) {
         const def = UNITS[unit];
         const maxPop = Math.floor(territory.pop / (def.manpower || 1));
@@ -543,21 +706,34 @@ export class WarRoom extends Room<MatchS> {
 
         applyCommand(this.sim, player.id, { t: 'TRAIN', territoryId: tid, unit, count: batch });
         trained++;
-        break; // one unit type per territory per cycle
+        break;
       }
     }
   }
 
-  // ── build: barracks first, then military, then economy, multiple per cycle ─
+  // ── build: strategic — naval/barracks when sea-locked, economy to fund war ─
 
   private aiBuild(player: Player, rules: AIDifficultyRules): void {
     if (player.resources.money < rules.buildReserve) return;
+
+    // Detect if this player is sea-locked: no armies can reach enemy territory
+    // because all border links are sea links and they lack marines/navy.
+    const seaLocked = this.isSeaLocked(player.id);
 
     const ownedTids: string[] = [];
     for (const territory of Object.values(this.sim.territories)) {
       if (territory.ownerId === player.id) ownedTids.push(territory.id);
     }
-    shuffle(ownedTids);
+    // Sort coastal territories first when sea-locked.
+    if (seaLocked) {
+      ownedTids.sort((a, b) => {
+        const aCoastal = TERRITORY_DEFS[a]?.coastal ?? false;
+        const bCoastal = TERRITORY_DEFS[b]?.coastal ?? false;
+        return (bCoastal ? 1 : 0) - (aCoastal ? 1 : 0);
+      });
+    } else {
+      shuffle(ownedTids);
+    }
 
     let built = 0;
     for (const tid of ownedTids) {
@@ -568,17 +744,17 @@ export class WarRoom extends Room<MatchS> {
       const tdef = TERRITORY_DEFS[tid];
       const coastal = tdef?.coastal ?? false;
 
-      // Priority order: barracks → other military → economy → tech.
-      const priority: BuildingType[] = [
-        'barracks',
-        'vehicle_plant', 'airbase', 'naval_base', 'academy',
-        'farm', 'commercial', 'factory', 'mine', 'power_plant',
-        'research_center', 'university', 'advanced_lab',
-      ];
+      // When sea-locked, prioritise naval and barracks upgrades (for marines).
+      const priority: BuildingType[] = seaLocked && coastal
+        ? ['naval_base', 'barracks', 'airbase', 'vehicle_plant', 'academy',
+           'farm', 'commercial', 'factory', 'mine', 'power_plant',
+           'research_center', 'university', 'advanced_lab']
+        : ['barracks', 'vehicle_plant', 'airbase', 'naval_base', 'academy',
+           'farm', 'commercial', 'factory', 'mine', 'power_plant',
+           'research_center', 'university', 'advanced_lab'];
 
       for (const type of priority) {
         const bdef = BUILDINGS[type];
-        // Terrain/coastal gates.
         if (bdef.requiresCoastal && !coastal) continue;
         if (bdef.requiresTerrain && tdef && !bdef.requiresTerrain.includes(tdef.terrain)) continue;
 
@@ -597,6 +773,24 @@ export class WarRoom extends Room<MatchS> {
         break;
       }
     }
+  }
+
+  /** Returns true if no army of this player can reach an enemy/neutral territory directly. */
+  private isSeaLocked(playerId: string): boolean {
+    for (const army of Object.values(this.sim.armies)) {
+      if (army.ownerId !== playerId || army.movingTo) continue;
+      for (const link of ADJACENCY[army.at] ?? []) {
+        const t = this.sim.territories[link.to];
+        if (!t || t.ownerId === playerId) continue;
+        // Check if ANY unit type in this army can traverse this link.
+        for (const unitId of Object.keys(army.units) as UnitType[]) {
+          if (!army.units[unitId] || army.units[unitId]! <= 0) continue;
+          const probe = { ...army, units: { [unitId]: 1 } as UnitCounts };
+          if (!moveBlocker(this.sim, probe, link.to)) return false;
+        }
+      }
+    }
+    return true;
   }
 
   private flushEvents(): void {
@@ -631,24 +825,24 @@ export class WarRoom extends Room<MatchS> {
       return;
     }
 
-    // Turn-based mode: queue commands during planning, validate at resolution.
+    // Turn-based mode: queue commands during planning/post_attack, validate only.
     if (this.sim.turnOrder.length > 0) {
       if (client.sessionId !== this.sim.turnPlayer) {
         client.send('reject', { reason: 'not_your_turn' });
         return;
       }
-      if (this.sim.turnPhase !== 'planning') {
-        client.send('reject', { reason: 'turn_phase', message: 'Turn is resolving — wait.' });
+      if (this.sim.turnPhase !== 'planning' && this.sim.turnPhase !== 'post_attack') {
+        client.send('reject', { reason: 'turn_phase', message: 'Wait for your planning phase.' });
         return;
       }
-      // Pre-validate: if the command is outright malformed, reject early so the
-      // player gets immediate feedback rather than discovering it at turn end.
-      const result = applyCommand(this.sim, client.sessionId, cmd);
+      // Validate only — don't apply. Commands are applied when the queue is flushed.
+      // This prevents the double-spend bug where applyCommand was called both here
+      // AND during resolveTurn().
+      const result = validateCommand(this.sim, client.sessionId, cmd);
       if (!result.ok) {
         client.send('reject', { reason: result.reason, message: result.message, command: cmd.t });
         return;
       }
-      // QUEUE the command for resolution at turn end.
       this.queuedCommands.push(cmd);
       return;
     }
@@ -898,27 +1092,27 @@ const DIFFICULTY_RULES: Record<string, AIDifficultyRules> = {
     researchReserve: 500,
   },
   medium: {
-    aggression: 0.5,
+    aggression: 0.8,
     maxBuildingLevel: 5,
     trainBatch: 6,
-    trainBatches: 1,
-    buildBatches: 1,
-    splitArmies: false,
-    minAttackForce: 8,
-    buildReserve: 300,
-    trainReserve: 200,
+    trainBatches: 2,
+    buildBatches: 2,
+    splitArmies: true,
+    minAttackForce: 6,
+    buildReserve: 200,
+    trainReserve: 150,
     researchReserve: 250,
   },
   hard: {
-    aggression: 0.85,
+    aggression: 1.0,
     maxBuildingLevel: 8,
-    trainBatch: 9,
-    trainBatches: 2,
-    buildBatches: 1,
+    trainBatch: 12,
+    trainBatches: 3,
+    buildBatches: 2,
     splitArmies: true,
-    minAttackForce: 6,
-    buildReserve: 300,
-    trainReserve: 200,
-    researchReserve: 150,
+    minAttackForce: 4,
+    buildReserve: 150,
+    trainReserve: 100,
+    researchReserve: 100,
   },
 };

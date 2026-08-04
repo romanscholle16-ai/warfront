@@ -137,6 +137,8 @@ export interface UnitDef {
   speed: number;
   /** Damage multiplier against each domain. Missing entry means 1. */
   vs?: Partial<Record<UnitDomain, number>>;
+  /** Troop value used for dice-roll combat. Infantry=1, tanks/planes/naval=5-7. */
+  troopValue: number;
   /** Building (and minimum level) required to train it. */
   requires: { building: BuildingType; level: number };
   mvp: boolean;
@@ -349,7 +351,7 @@ export interface GameEvent {
 
 export type MatchPhase = 'lobby' | 'playing' | 'paused' | 'ended';
 
-export type TurnPhase = 'planning' | 'resolving';
+export type TurnPhase = 'planning' | 'resolving' | 'post_attack';
 
 export type GameMode =
   | 'casual' | 'ranked_1v1' | 'ranked_2v2' | 'ranked_4v4'
